@@ -1,0 +1,15 @@
+BrainDeath
+CNSHemorrhage
+CNSInfarction
+CNSdiffuseischemia
+DischargedAlive
+Intracranialhemorrhage
+IntraventricularCNSHemorrhage
+IschemicStroke
+ParenchymalCNShemorrhage
+SigniNeurologicalInjury
+Discontinuation
+Seizures
+SeizuresClinical
+SeizuresEEG
+HoursECMO

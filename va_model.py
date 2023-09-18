@@ -7,6 +7,8 @@ from sklearn.metrics import roc_auc_score, average_precision_score
 from sklearn.model_selection import GridSearchCV
 
 from data import read_data, discretize
+from sklearn.metrics import log_loss
+from scipy.stats import chi2
 
 subset = [
      'SepsisMeningitisExcMyocarditis',
@@ -71,7 +73,7 @@ bins = {
 
 frame = discretize(frame, bins)
 
-print (f"Read data set having {len(frame)} rows and {len(data.columns)-1} features")
+print (f"Read data set having {len(frame)} rows and {len(frame.columns)-1} features")
 
 data, labels = frame.drop(['PrimaryComposite'], axis=1), frame.PrimaryComposite
 data, data_test, labels, labels_test = train_test_split(data, labels, stratify=labels, test_size=0.2, random_state=0)
@@ -95,25 +97,36 @@ class IntLogisticRegression(LogisticRegression):
         self.intercept_ = intercept_ / self.factor
         return self
 
-
-clf = GridSearchCV(IntLogisticRegression(factor = 10, C = 1), 
+a, b = 10, 17
+clf = GridSearchCV(IntLogisticRegression(factor = a, C = 1), 
                    param_grid = dict(C = np.logspace(-4, 4, 10)),
                    scoring='neg_brier_score')
 clf.fit(data, labels)
 clf = clf.best_estimator_
 print ("Fit logistic regression model")
 
-a, b = 10, 17
-variables = [v.replace("_", " = ") for v in data.columns.tolist()]
-weights = pd.DataFrame(list(zip(variables, np.round(clf.coef_.ravel() * a) )), 
-                       columns = ['variable', 'coef'])
-weights['importance'] = np.round(clf.coef_.ravel(), 4)
+
+variables = [v[:v.index("_")] if v.endswith("]") else v for v in data.columns.tolist()]
+values = [v[v.index("_")+1:] if v.endswith("]") else 1 for v in data.columns.tolist()]
+weights = pd.DataFrame(list(zip(variables, values, np.round(clf.coef_.ravel() * a).astype(int), np.round(np.exp(clf.coef_.ravel()), 4) )), 
+                       columns = ['Variable', 'Value', 'Coefficient', 'Odds Ratio'])
 
 print ("P(SNI = True | Features) = σ((Total Coefficients + Intercept - b)/a)")
 
-print (weights[weights.coef.abs() > 0.0][['Variable', 'Coefficient']])
-print (f"Intercept = {clf.intercept_.round(4}")
-
+print (weights[weights.Coefficient.abs() > 0.0][['Variable', 'Value', 'Coefficient', 'Odds Ratio']].to_string(index=False))
+print (f"Intercept = {clf.intercept_.round(4).item()}")
+print (f"a = {a}, b = {b}")
 print ("AUC-ROC = %.4f" % roc_auc_score(labels_test, clf.predict_proba(data_test)[:, 1]))
 print ("AUC-PR = %.4f" % average_precision_score(labels_test, clf.predict_proba(data_test)[:, 1]))
 
+
+y_pred = clf.predict_proba(data*0)
+y_true = labels
+loglik0 = -log_loss(y_true, y_pred, normalize=False)
+
+y_pred = clf.predict_proba(data)
+loglik1 = -log_loss(y_true, y_pred, normalize=False)
+
+G = -2*(loglik0 - loglik1)
+p_value = chi2.sf(G, len(data.columns))
+print (f"G = {np.round(G, 4)}, p = {p_value}")
